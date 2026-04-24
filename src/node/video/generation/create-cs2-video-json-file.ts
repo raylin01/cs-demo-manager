@@ -16,6 +16,24 @@ function getHlaeOutputFolderPath(outputFolderPath: string, sequence: Sequence) {
   return `${windowsToUnixPathSeparator(outputFolderPath)}/${getSequenceName(sequence)}`;
 }
 
+function getPlayerCameraTick(sequence: Sequence, cameraTick: number, setupSequenceTick: number) {
+  // Initial focus must be established before recording starts, otherwise CS2 can record the previous POV.
+  if (cameraTick <= sequence.startTick) {
+    return setupSequenceTick;
+  }
+
+  return cameraTick;
+}
+
+function getSetupSequenceTick(sequence: Sequence, tickrate: number) {
+  const roundedTickrate = Math.round(tickrate);
+  // CS2 demo headers do not expose tickrate through getDemoFromFilePath(), so the CLI may pass 0 here.
+  // Fall back to the standard CS2 demo tickrate to keep setup/focus commands ahead of recording.
+  const tickrateOffset = Number.isFinite(roundedTickrate) && roundedTickrate > 0 ? roundedTickrate : 64;
+
+  return Math.max(1, sequence.startTick - tickrateOffset);
+}
+
 type Options = {
   type: 'record' | 'watch';
   recordingSystem: RecordingSystem;
@@ -86,8 +104,7 @@ export async function createCs2VideoJsonFile({
       json.disablePlayerVoices(1);
     }
 
-    const roundedTickrate = Math.round(tickrate);
-    const setupSequenceTick = Math.max(1, sequence.startTick - roundedTickrate);
+    const setupSequenceTick = getSetupSequenceTick(sequence, tickrate);
 
     const hlaeOutputFolderPath = getHlaeOutputFolderPath(outputFolderPath, sequence);
     const presetName =
@@ -146,7 +163,9 @@ export async function createCs2VideoJsonFile({
     for (const camera of sequence.playerCameras) {
       const player = players.find((player) => player.steamId === camera.playerSteamId);
       if (player) {
-        json.addSpecPlayer(camera.tick, player.slot);
+        const cameraTick = getPlayerCameraTick(sequence, camera.tick, setupSequenceTick);
+        const specPlayerDelayTicks = cameraTick === setupSequenceTick ? 4 : 0;
+        json.addSpecPlayer(cameraTick, player.slot, specPlayerDelayTicks);
       }
     }
     for (const { id, tick } of sequence.cameras) {

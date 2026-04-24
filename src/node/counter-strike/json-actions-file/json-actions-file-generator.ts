@@ -38,7 +38,7 @@ export class JSONActionsFileGenerator {
     return this;
   }
 
-  public addSpecPlayer(tick: number, playerId: number | string) {
+  public addSpecPlayer(tick: number, playerId: number | string, specPlayerDelayTicks = 0) {
     const actionTick = this.getValidTick(tick);
     if (this.game === Game.CSGO) {
       // Spectate a player is the combination of spec_lock_to_accountid and spec_player_by_accountid.
@@ -61,7 +61,7 @@ export class JSONActionsFileGenerator {
       });
       this.actions.push({
         cmd: `spec_player ${playerId}`,
-        tick: actionTick,
+        tick: actionTick + specPlayerDelayTicks,
       });
     }
 
